@@ -9,9 +9,11 @@ export default function NewTask() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const [deadline, setDeadline] = useState('');
   
   const [projects, setProjects] = useState<{_id: string, name: string}[]>([]);
+  const [members, setMembers] = useState<{_id: string, name: string, email: string}[]>([]);
   const [error, setError] = useState('');
   
   const { user } = useAuth();
@@ -19,15 +21,22 @@ export default function NewTask() {
 
   useEffect(() => {
     if (user && user.role === 'Admin') {
-      fetch('http://localhost:5000/api/projects', {
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      })
-        .then(res => res.json())
-        .then(data => {
-          setProjects(data);
-          if (data.length > 0) setProjectId(data[0]._id);
+      const headers = { 'Authorization': `Bearer ${user.token}` };
+
+      Promise.all([
+        fetch('http://localhost:5000/api/projects', { headers }).then(res => res.json()),
+        fetch('http://localhost:5000/api/auth/users', { headers }).then(res => res.json())
+      ])
+        .then(([projectsData, membersData]) => {
+          const projectList = Array.isArray(projectsData) ? projectsData : [];
+          const memberList = Array.isArray(membersData) ? membersData : [];
+
+          setProjects(projectList);
+          setMembers(memberList);
+          if (projectList.length > 0) setProjectId(projectList[0]._id);
+          if (memberList.length > 0) setAssigneeId(memberList[0]._id);
         })
-        .catch(err => console.error(err));
+        .catch(() => setError('Failed to load task form data'));
     }
   }, [user]);
 
@@ -42,7 +51,7 @@ export default function NewTask() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.token}`
         },
-        body: JSON.stringify({ title, description, project: projectId, deadline }),
+        body: JSON.stringify({ title, description, project: projectId, assignee: assigneeId, deadline }),
       });
 
       if (res.ok) {
@@ -98,6 +107,22 @@ export default function NewTask() {
               {projects.length === 0 && <option value="">No projects available</option>}
               {projects.map(p => (
                 <option key={p._id} value={p._id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="font-semibold mb-1 text-sm">Assign To</label>
+            <select
+              className="input-field w-full p-3 rounded bg-white/5 border border-white/10 text-white focus:border-primary focus:outline-none transition-colors appearance-none"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              required
+              style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
+            >
+              {members.length === 0 && <option value="">No members available</option>}
+              {members.map(member => (
+                <option key={member._id} value={member._id}>{member.name} ({member.email})</option>
               ))}
             </select>
           </div>
